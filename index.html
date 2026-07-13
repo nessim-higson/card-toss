@@ -249,9 +249,8 @@
      once the frame has mostly landed */
   .page {
     position: absolute;
-    left: 0; right: 0;
-    top: 50%; bottom: 0;
-    background: #fff;
+    inset: 0;
+    background: transparent;
     opacity: 0;
     transform: translateY(14px);
     pointer-events: none;
@@ -259,6 +258,8 @@
     overscroll-behavior: contain;
     transition: opacity .4s ease, transform .55s cubic-bezier(.16, 1, .3, 1);
   }
+  .page .hero-gap { height: 50%; }      /* the hero shows through here and scrolls away with the sheet */
+  .page .sheet { background: #fff; min-height: 60%; }
   .card.takeover .page {
     opacity: 1;
     transform: none;
@@ -559,6 +560,8 @@ const SCOPES = ['Brand, web, motion', 'Product & identity', 'Web experience', 'S
 
 function pageHTML(d, i) {
   return `
+  <div class="hero-gap"></div>
+  <div class="sheet">
   <div class="inner">
     <h2>${d.t}</h2>
     <p class="kicker">${d.s}</p>
@@ -596,6 +599,7 @@ function pageHTML(d, i) {
     <div class="ph"><span>Fig. 03 — Detail</span></div>
 
     <p class="para">The system is documented, handed over, and — the real test — has already survived two quarters of changes made by people who weren't in the room. Nothing drifted. That's the outcome we're proudest of: not the launch, but the fact that it still looks like itself.</p>
+  </div>
   </div>`;
 }
 
@@ -620,8 +624,9 @@ const cards = DATA.map((d, i) => {
       </svg>
     </button>`;
   stage.appendChild(el);
-  return {
+  const card = {
     i, el, veil: el.querySelector('.veil'), page: el.querySelector('.page'),
+    cover: el.querySelector('.cover'),
     // physical state (springs)
     x: 0, y: -1200, r: -20 + Math.random() * 40, s: 1, o: 1, b: 1, wsh: 0,
     vx: 0, vy: 0, vr: 0, vs: 0, vo: 0, vb: 0,
@@ -629,6 +634,11 @@ const cards = DATA.map((d, i) => {
     tx: 0, ty: -1200, tr: 0, ts: 1, to: 1, tb: 1, twsh: 0,
     flying: false, dragging: false, entering: false,
   };
+  // the hero rides the scroll 1:1 — one surface, App Store style
+  card.page.addEventListener('scroll', () => {
+    if (takeoverC === card) card.cover.style.transform = `translateY(${-card.page.scrollTop}px)`;
+  }, { passive: true });
+  return card;
 });
 
 /* ---------- state ---------- */
@@ -670,7 +680,7 @@ const HINTS = {
 
 const BW = 480, BH = 320;   // cards are laid out at base size, scaled by transform
 let RS = 1;                 // responsive scale
-const STACK_DY = 9.5;       // px each buried card peeks out below the one above
+const STACK_DY = 10.5;      // px each buried card peeks out below the one above
 const STACK_DS = 0.012;     // scale shed per depth — strips run nearly full width
 const STACK_N  = 6;         // visible strips below the top card
 
@@ -971,7 +981,8 @@ function openTakeover(c) {
   el.style.opacity = 1;
   el.style.filter = 'brightness(1)';
   el.style.zIndex = 550;
-  el.querySelector('.page').scrollTop = 0;
+  c.page.scrollTop = 0;
+  c.cover.style.transform = '';
 
   // edge to edge, a strip of daylight up top to click out of
   const w = panelW;
@@ -995,6 +1006,8 @@ function closeTakeover() {
   ++takeoverSeq;                      // invalidate any open still waiting on a frame
   const el = c.el;
 
+  c.page.scrollTop = 0;               // the page-fade masks the reset
+  c.cover.style.transform = '';
   el.classList.remove('takeover');    // page sinks, hero un-crops, ✕ becomes ↗
   bakePose(c);                        // transition carries it back to its slot
   scrimEl.classList.remove('on');
@@ -1144,6 +1157,7 @@ addEventListener('wheel', e => {
     // takeover, hero included, and can't double-fire with native scroll
     e.preventDefault();
     takeoverC.page.scrollTop += e.deltaY;
+    takeoverC.cover.style.transform = `translateY(${-takeoverC.page.scrollTop}px)`;
     return;
   }
   const d = e.deltaY + e.deltaX;     // horizontal swipes ride the same gesture
