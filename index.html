@@ -131,7 +131,7 @@
     position: absolute;
     left: 0; top: 50%;
     width: 480px; height: 320px;
-    transform: translateY(-50%) scale(1);
+    transform: translateY(-50%) scale(var(--k, 1));
     transform-origin: left center;
   }
 
@@ -207,12 +207,12 @@
   }
   .scrim.on { opacity: 1; pointer-events: auto; }
 
-  /* the morph: frame, position and radius ride one curve */
+  /* the morph: frame, position and radius ride one curve — no margin
+     animation, no compounding transform scale: width/height/translate only */
   .card.anim {
     transition:
       width .65s cubic-bezier(.16, 1, .3, 1),
       height .65s cubic-bezier(.16, 1, .3, 1),
-      margin .65s cubic-bezier(.16, 1, .3, 1),
       transform .65s cubic-bezier(.16, 1, .3, 1),
       border-radius .65s cubic-bezier(.16, 1, .3, 1),
       box-shadow .65s cubic-bezier(.16, 1, .3, 1);
@@ -222,12 +222,11 @@
   .card.anim .meta  { transition: opacity .28s ease; }
 
   .card.takeover {
-    border-radius: 12px;
+    border-radius: 12px 12px 0 0;
     box-shadow: 0 40px 90px -18px rgba(6, 12, 45, 0.45);
     cursor: default;
   }
-  .card.takeover .cover { height: 55%; }
-  .card.takeover .art { transform: translateY(-50%) scale(var(--k, 1)); }
+  .card.takeover .cover { height: 50%; }
   .card.takeover .meta { opacity: 0; }
   .card.takeover .expand .ic-open  { display: none; }
   .card.takeover .expand .ic-close { display: block; }
@@ -242,16 +241,18 @@
   }
   .card.takeover .expand:hover { background: rgba(28, 28, 30, 0.62); }
 
-  /* the page beneath the hero — rises in once the frame has mostly landed */
+  /* the page beneath the hero — a long editorial scroll that rises in
+     once the frame has mostly landed */
   .page {
     position: absolute;
     left: 0; right: 0;
-    top: 55%; bottom: 0;
-    padding: 32px 42px;
+    top: 50%; bottom: 0;
     background: #fff;
     opacity: 0;
     transform: translateY(14px);
     pointer-events: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     transition: opacity .4s ease, transform .55s cubic-bezier(.16, 1, .3, 1);
   }
   .card.takeover .page {
@@ -260,9 +261,55 @@
     pointer-events: auto;
     transition-delay: .2s;
   }
-  .page h2 { font-size: 29px; font-weight: 650; letter-spacing: -0.02em; color: #1d1d1f; }
-  .page .kicker { font-size: 15px; color: #a0a0a5; margin-top: 4px; }
-  .page .para { margin-top: 18px; font-size: 15px; line-height: 1.65; color: #6b6b70; max-width: 58ch; }
+  .page::-webkit-scrollbar { width: 10px; }
+  .page::-webkit-scrollbar-thumb { background: #e3e3e6; border-radius: 99px; border: 3px solid #fff; }
+  .page::-webkit-scrollbar-track { background: transparent; }
+
+  .page .inner {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 40px 42px 80px;
+  }
+  .page h2 { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; color: #1d1d1f; }
+  .page .kicker { font-size: 15.5px; color: #a0a0a5; margin-top: 5px; }
+  .page .para { margin-top: 18px; font-size: 15px; line-height: 1.7; color: #6b6b70; }
+  .page h3 {
+    margin-top: 44px;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: #b4b4b9;
+  }
+  .page .specs {
+    display: flex; flex-wrap: wrap;
+    gap: 10px 34px;
+    margin-top: 26px;
+    padding: 18px 0;
+    border-top: 1px solid #f0f0f2;
+    border-bottom: 1px solid #f0f0f2;
+    font-size: 13px;
+  }
+  .page .specs b { display: block; font-weight: 600; color: #1d1d1f; }
+  .page .specs span { color: #a0a0a5; }
+  .page blockquote {
+    margin: 40px 0 0;
+    font-size: 21px; line-height: 1.45;
+    font-weight: 500; letter-spacing: -0.01em;
+    color: #1d1d1f;
+  }
+  .page blockquote footer { margin-top: 10px; font-size: 13px; font-weight: 400; color: #a0a0a5; }
+  .page .ph {
+    margin-top: 26px;
+    aspect-ratio: 16 / 9;
+    border-radius: 10px;
+    background: linear-gradient(150deg, #f4f4f6, #e9e9ee);
+    display: grid;
+    place-items: center;
+  }
+  .page .ph span {
+    font-size: 11.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: #b6b6bc;
+  }
 
   .chrome footer { transition: opacity .35s ease; }
   body.takeover-on .chrome footer { opacity: 0; }
@@ -502,6 +549,52 @@ const COVERS = {
   sunset: `<div class="sun"></div>`,
 };
 
+/* ---------- takeover page: long-form placeholder content ---------- */
+const ROLES = ['Design & build', 'Identity & system', 'Direction & prototype', 'Design & engineering'];
+const SCOPES = ['Brand, web, motion', 'Product & identity', 'Web experience', 'System & tooling'];
+
+function pageHTML(d, i) {
+  return `
+  <div class="inner">
+    <h2>${d.t}</h2>
+    <p class="kicker">${d.s}</p>
+    <p class="para">${d.p}</p>
+
+    <div class="specs">
+      <div><b>Year</b><span>2026</span></div>
+      <div><b>Role</b><span>${ROLES[i % ROLES.length]}</span></div>
+      <div><b>Scope</b><span>${SCOPES[i % SCOPES.length]}</span></div>
+      <div><b>Status</b><span>Shipped</span></div>
+    </div>
+
+    <h3>The brief</h3>
+    <p class="para">Like most good briefs, this one arrived as a complaint, not a request. The team behind ${d.t} knew exactly what was wrong with the current thing — slow to explain, slower to use, invisible in a crowded field — and had no fixed opinion about what should replace it. That gap between a sharp problem and an open solution is where the interesting work lives.</p>
+    <p class="para">We spent the first two weeks refusing to design anything. Instead: interviews, screen recordings, a teardown of every adjacent product we could find, and one long wall of printouts that slowly sorted itself into three piles — things people loved, things people tolerated, and things nobody had ever noticed.</p>
+
+    <div class="ph"><span>Fig. 01 — Early exploration</span></div>
+
+    <h3>Process</h3>
+    <p class="para">The first prototypes were deliberately too plain. Stripping the idea to its skeleton made it obvious which bones were load-bearing: the moment we removed the part everyone assumed was decorative, the whole thing stopped making sense — so it stayed, and became the centre of the system.</p>
+    <p class="para">From there the work was mostly subtraction. Each week we shipped a build to a small circle of users and removed whatever they didn't mention. What survived four rounds of that is what you see here: fewer moves, harder working ones, and a visual language that holds together at every size we could break it at.</p>
+
+    <blockquote>
+      “The best version of ${d.t} was the third one — the one where we finally stopped adding.”
+      <footer>— from the project retro</footer>
+    </blockquote>
+
+    <div class="ph"><span>Fig. 02 — The system in use</span></div>
+
+    <p class="para">Motion carried more of the weight than usual. Because the interface itself stays quiet, the transitions do the explaining: where things come from, where they go, what belongs to what. Every animation in the final build runs on a single shared curve, which is most of why it feels like one object rather than a set of screens.</p>
+
+    <h3>Outcome</h3>
+    <p class="para">${d.t} shipped on schedule and did the thing launches rarely do: the numbers moved in the direction the story predicted. Time-to-first-action halved. The support queue went quiet on the topics the redesign touched. And the team now describes the product in one sentence — the same sentence, every time, unprompted.</p>
+
+    <div class="ph"><span>Fig. 03 — Detail</span></div>
+
+    <p class="para">The system is documented, handed over, and — the real test — has already survived two quarters of changes made by people who weren't in the room. Nothing drifted. That's the outcome we're proudest of: not the launch, but the fact that it still looks like itself.</p>
+  </div>`;
+}
+
 /* ---------- build DOM ---------- */
 const stage = document.getElementById('stage');
 const N = DATA.length;
@@ -511,7 +604,7 @@ const cards = DATA.map((d, i) => {
   el.className = 'card' + (d.ink ? ' ink' : '');
   el.innerHTML = `
     <div class="cover cv-${d.c}"><div class="art">${COVERS[d.c]}</div></div>
-    <div class="page"><h2>${d.t}</h2><p class="kicker">${d.s}</p><p class="para">${d.p}</p></div>
+    <div class="page">${pageHTML(d, i)}</div>
     <div class="meta"><h3>${d.t}</h3><p>${d.s}</p></div>
     <div class="veil"></div>
     <button class="expand" aria-label="Expand">
@@ -833,8 +926,21 @@ function throwTop(dirX, dirY) {
    curve) rather than blowing up a scale — the cover becomes a hero band,
    the page rises in beneath it, everything else recedes behind a scrim. */
 const scrimEl = document.getElementById('scrim');
-const TOP_GAP = 52, T_INSET = 10;
+const TOP_GAP = 48;
 let takeoverTimer = null;
+
+/* the engine renders cards as a scaled 480×320; for the morph we bake that
+   scale into real width/height so only width/height/translate animate —
+   one curve, no compounding, no margin layout-thrash */
+function bakePose(c) {
+  const s = Math.max(0.01, c.s);
+  const el = c.el;
+  el.style.width = (BW * s) + 'px';
+  el.style.height = (BH * s) + 'px';
+  el.style.transform =
+    `translate(${c.x + (BW / 2) * (1 - s)}px, ${c.y + (BH / 2) * (1 - s)}px) rotate(${c.r}deg) scale(1)`;
+  el.style.setProperty('--k', s);
+}
 
 function openTakeover(c) {
   if (takeoverC || c.flying || c.frozen) return;
@@ -844,26 +950,25 @@ function openTakeover(c) {
   scrimEl.classList.add('on');
   setTargets();                       // the rest of the deck recedes
 
-  const w = panelW - T_INSET * 2;
-  const h = panelH - TOP_GAP - T_INSET;
-  const ty = (TOP_GAP + h / 2) - panelH / 2;
   const el = c.el;
-
-  // explicit start values so the transition has a "from"
-  el.style.width = BW + 'px';
-  el.style.height = BH + 'px';
-  el.style.margin = `${-BH / 2}px 0 0 ${-BW / 2}px`;
+  bakePose(c);
   el.style.opacity = 1;
   el.style.filter = 'brightness(1)';
   el.style.zIndex = 550;
-  el.style.setProperty('--k', w / BW);
+  el.querySelector('.page').scrollTop = 0;
+
+  // edge to edge, a strip of daylight up top to click out of
+  const w = panelW;
+  const h = panelH - TOP_GAP;
+  const tx = BW / 2 - panelW / 2;
+  const ty = TOP_GAP - panelH / 2 + BH / 2;
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
     el.classList.add('anim', 'takeover');
     el.style.width = w + 'px';
     el.style.height = h + 'px';
-    el.style.margin = `${-h / 2}px 0 0 ${-w / 2}px`;
-    el.style.transform = `translate(0px, ${ty}px) rotate(0deg) scale(1)`;
+    el.style.transform = `translate(${tx}px, ${ty}px) rotate(0deg) scale(1)`;
+    el.style.setProperty('--k', w / BW);
   }));
 }
 
@@ -873,10 +978,7 @@ function closeTakeover() {
   const el = c.el;
 
   el.classList.remove('takeover');    // page sinks, hero un-crops, ✕ becomes ↗
-  el.style.width = BW + 'px';
-  el.style.height = BH + 'px';
-  el.style.margin = `${-BH / 2}px 0 0 ${-BW / 2}px`;
-  el.style.transform = `translate(${c.x}px, ${c.y}px) rotate(${c.r}deg) scale(${Math.max(0.01, c.s)})`;
+  bakePose(c);                        // transition carries it back to its slot
   scrimEl.classList.remove('on');
   document.body.classList.remove('takeover-on');
 
@@ -884,7 +986,7 @@ function closeTakeover() {
     if (takeoverC !== c) return;
     clearTimeout(takeoverTimer);
     el.classList.remove('anim');
-    el.style.width = el.style.height = el.style.margin = '';
+    el.style.width = el.style.height = '';
     el.style.removeProperty('--k');
     c.takeover = false;
     takeoverC = null;
