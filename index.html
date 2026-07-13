@@ -1031,6 +1031,7 @@ function applyStage(c, stage) {
   const g = stageGeom(stage);
   c.el.style.width = g.w + 'px';
   c.el.style.height = g.h + 'px';
+  c.el.style.borderRadius = stage === 'full' ? '12px 12px 0 0' : '14px';
   c.el.style.transform = `translate(${g.tx}px, ${g.ty}px) rotate(0deg) scale(1)`;
   c.el.style.setProperty('--k', g.w / BW);
   c._sh = null;   // takeover shadow is class-driven; forget the cached tier
@@ -1044,6 +1045,8 @@ function bakePose(c) {
   const el = c.el;
   el.style.width = (BW * s) + 'px';
   el.style.height = (BH * s) + 'px';
+  // the transform-scaled card shows 14px × s of curvature — keep exactly that
+  el.style.borderRadius = (14 * s).toFixed(2) + 'px';
   el.style.transform =
     `translate(${c.x + (BW / 2) * (1 - s)}px, ${c.y + (BH / 2) * (1 - s)}px) rotate(${c.r}deg) scale(1)`;
   el.style.setProperty('--k', s);
@@ -1108,7 +1111,7 @@ function closeTakeover() {
     if (takeoverC !== c || seq !== takeoverSeq) return;
     clearTimeout(takeoverTimer);
     el.classList.remove('anim', 'takeover', 'peek');   // belt & braces vs stale frames
-    el.style.width = el.style.height = '';
+    el.style.width = el.style.height = el.style.borderRadius = '';
     el.style.removeProperty('--k');
     c.takeover = false;
     takeoverC = null;
