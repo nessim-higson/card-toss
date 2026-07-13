@@ -116,6 +116,7 @@
     margin: -160px 0 0 -240px;
     border-radius: 14px;
     overflow: hidden;
+    background: #fff;
     box-shadow: 0 24px 55px -12px rgba(10, 12, 40, 0.35);
     cursor: grab;
     user-select: none;
@@ -125,7 +126,14 @@
   }
   .card.grabbing { cursor: grabbing; }
 
-  .cover { position: absolute; inset: 0; }
+  .cover { position: absolute; left: 0; right: 0; top: 0; height: 100%; overflow: hidden; }
+  .art {
+    position: absolute;
+    left: 0; top: 50%;
+    width: 480px; height: 320px;
+    transform: translateY(-50%) scale(1);
+    transform-origin: left center;
+  }
 
   /* opaque white wash — the "faded" entry look without any see-through */
   .veil {
@@ -183,8 +191,81 @@
   .loader.on { opacity: 1; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .expand .ic-close { display: none; }
-  body[data-mode="zoom"] .card.is-current .expand .ic-open  { display: none; }
-  body[data-mode="zoom"] .card.is-current .expand .ic-close { display: block; }
+
+  /* ===== app-store takeover ===== */
+
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(252, 252, 253, 0.55);
+    backdrop-filter: blur(14px) saturate(1.1);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .5s ease;
+    z-index: 540;
+  }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+
+  /* the morph: frame, position and radius ride one curve */
+  .card.anim {
+    transition:
+      width .65s cubic-bezier(.16, 1, .3, 1),
+      height .65s cubic-bezier(.16, 1, .3, 1),
+      margin .65s cubic-bezier(.16, 1, .3, 1),
+      transform .65s cubic-bezier(.16, 1, .3, 1),
+      border-radius .65s cubic-bezier(.16, 1, .3, 1),
+      box-shadow .65s cubic-bezier(.16, 1, .3, 1);
+  }
+  .card.anim .cover { transition: height .65s cubic-bezier(.16, 1, .3, 1); }
+  .card.anim .art   { transition: transform .65s cubic-bezier(.16, 1, .3, 1); }
+  .card.anim .meta  { transition: opacity .28s ease; }
+
+  .card.takeover {
+    border-radius: 12px;
+    box-shadow: 0 40px 90px -18px rgba(6, 12, 45, 0.45);
+    cursor: default;
+  }
+  .card.takeover .cover { height: 55%; }
+  .card.takeover .art { transform: translateY(-50%) scale(var(--k, 1)); }
+  .card.takeover .meta { opacity: 0; }
+  .card.takeover .expand .ic-open  { display: none; }
+  .card.takeover .expand .ic-close { display: block; }
+  .card.takeover .expand,
+  .card.ink.takeover .expand {
+    width: 34px; height: 34px;
+    top: 14px; right: 14px;
+    background: rgba(28, 28, 30, 0.42);
+    color: #fff;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .card.takeover .expand:hover { background: rgba(28, 28, 30, 0.62); }
+
+  /* the page beneath the hero — rises in once the frame has mostly landed */
+  .page {
+    position: absolute;
+    left: 0; right: 0;
+    top: 55%; bottom: 0;
+    padding: 32px 42px;
+    background: #fff;
+    opacity: 0;
+    transform: translateY(14px);
+    pointer-events: none;
+    transition: opacity .4s ease, transform .55s cubic-bezier(.16, 1, .3, 1);
+  }
+  .card.takeover .page {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition-delay: .2s;
+  }
+  .page h2 { font-size: 29px; font-weight: 650; letter-spacing: -0.02em; color: #1d1d1f; }
+  .page .kicker { font-size: 15px; color: #a0a0a5; margin-top: 4px; }
+  .page .para { margin-top: 18px; font-size: 15px; line-height: 1.65; color: #6b6b70; max-width: 58ch; }
+
+  .chrome footer { transition: opacity .35s ease; }
+  body.takeover-on .chrome footer { opacity: 0; }
 
   /* ================= 12 original covers ================= */
 
@@ -312,7 +393,7 @@
 <div class="backdrop"></div>
 
 <div class="panel">
-  <div class="stage" id="stage"><div class="loader" id="loader"></div></div>
+  <div class="stage" id="stage"><div class="scrim" id="scrim"></div><div class="loader" id="loader"></div></div>
   <div class="chrome">
     <header>
       <span class="who">Card Toss</span>
@@ -345,18 +426,30 @@
    ============================================================ */
 
 const DATA = [
-  { t: 'Northstar',      s: 'A new home for design systems',        c: 'northstar' },
-  { t: 'Market',         s: 'Everything shopping, in one place',    c: 'market', ink: true },
-  { t: 'Field Notes',    s: 'Essays from the studio floor',         c: 'fieldnotes' },
-  { t: 'August Index',   s: 'A quarterly of small wonders',         c: 'index', ink: true },
-  { t: 'Resonance',      s: 'An instrument for the browser',        c: 'resonance' },
-  { t: 'Loudspeaker',    s: 'A campaign system in one bar',         c: 'loudspeaker' },
-  { t: 'Speaker Series', s: 'Posters for a season of talks',        c: 'posters' },
-  { t: 'Weather Room',   s: 'A calmer forecast',                    c: 'weather', ink: true },
-  { t: 'One Line',       s: 'Drawings from the creative internet',  c: 'oneline', ink: true },
-  { t: 'Pocket Studio',  s: 'Three screens, one flow',              c: 'pocket' },
-  { t: 'Monument',       s: 'An identity cut in granite',           c: 'monument' },
-  { t: 'Sunset Club',    s: 'A social for golden hour',             c: 'sunset', ink: true },
+  { t: 'Northstar',      s: 'A new home for design systems',        c: 'northstar',
+    p: 'A single source of truth for tokens, patterns and voice — built so every team ships from the same place. The system covers web, native and email, and reviews itself: every merged component is checked against the canon nightly.' },
+  { t: 'Market',         s: 'Everything shopping, in one place',    c: 'market', ink: true,
+    p: 'One search bar in front of every storefront. Market folds catalogues, reviews and checkout into a single surface, so buying something takes exactly as many taps as deciding you want it.' },
+  { t: 'Field Notes',    s: 'Essays from the studio floor',         c: 'fieldnotes',
+    p: 'A slow journal about fast work. Twelve essays a volume, set in one serif, on what actually happens between the brief and the thing — the dead ends, the lucky accidents, the weather.' },
+  { t: 'August Index',   s: 'A quarterly of small wonders',         c: 'index', ink: true,
+    p: 'Every quarter, one hundred small things worth your attention — objects, interfaces, corners of the internet — ranked by nothing but delight. Issue 08 shipped with a fold-out chart of all eight hundred so far.' },
+  { t: 'Resonance',      s: 'An instrument for the browser',        c: 'resonance',
+    p: 'A synth that lives at a URL. No install, no manual — the page is the instrument, your cursor is the bow. Built on the Web Audio API with a physics layer that makes every gesture ring true.' },
+  { t: 'Loudspeaker',    s: 'A campaign system in one bar',         c: 'loudspeaker',
+    p: 'An identity reduced to a single element: one acid-green bar that can be a headline underline, a progress meter, a billboard, or the entire ad. The less it does, the louder it gets.' },
+  { t: 'Speaker Series', s: 'Posters for a season of talks',        c: 'posters',
+    p: 'Two colours per night, one grid for the year. Each talk gets a poster generated from its transcript — the type size follows how fast the speaker talked.' },
+  { t: 'Weather Room',   s: 'A calmer forecast',                    c: 'weather', ink: true,
+    p: 'A weather app with no radar, no alerts, no percentages. Just tomorrow, told gently, in a room of soft clouds. Reads like a note from someone who already looked outside for you.' },
+  { t: 'One Line',       s: 'Drawings from the creative internet',  c: 'oneline', ink: true,
+    p: 'A collection of drawings made without lifting the pen — one continuous line each. The archive holds four hundred and grows by one a day, whatever that day was like.' },
+  { t: 'Pocket Studio',  s: 'Three screens, one flow',              c: 'pocket',
+    p: 'A capture-to-publish pipeline that fits in a coat pocket. Shoot on the first screen, arrange on the second, ship from the third — nothing ever asks you to sit down at a desk.' },
+  { t: 'Monument',       s: 'An identity cut in granite',           c: 'monument',
+    p: 'A foundation that plans in centuries asked for a mark that would outlive its founders. One letter, one stone, one rule: nothing added that time could remove.' },
+  { t: 'Sunset Club',    s: 'A social for golden hour',             c: 'sunset', ink: true,
+    p: 'Open one hour a day, wherever the sun is setting. Post a photo of your sky, see everyone else’s, then it closes. No feed to catch up on — just this evening, shared.' },
 ];
 
 const COVERS = {
@@ -417,7 +510,8 @@ const cards = DATA.map((d, i) => {
   const el = document.createElement('div');
   el.className = 'card' + (d.ink ? ' ink' : '');
   el.innerHTML = `
-    <div class="cover cv-${d.c}">${COVERS[d.c]}</div>
+    <div class="cover cv-${d.c}"><div class="art">${COVERS[d.c]}</div></div>
+    <div class="page"><h2>${d.t}</h2><p class="kicker">${d.s}</p><p class="para">${d.p}</p></div>
     <div class="meta"><h3>${d.t}</h3><p>${d.s}</p></div>
     <div class="veil"></div>
     <button class="expand" aria-label="Expand">
@@ -441,9 +535,9 @@ const cards = DATA.map((d, i) => {
 });
 
 /* ---------- state ---------- */
-let mode = 'stack';        // stack | grid | row | zoom
-let zoomFrom = 'stack';    // mode to return to on close
+let mode = 'stack';        // stack | grid | row
 let cursor = 0;            // index of the current/top card
+let takeoverC = null;      // card currently expanded app-store style
 let peek = false;          // top card is being lifted — brighten the one beneath
 let introHold = true;      // under-deck stays hidden until the first card lands
 
@@ -473,9 +567,8 @@ const modesEl = document.getElementById('modes');
 
 const HINTS = {
   stack: 'Scroll — or grab the top card and throw it',
-  grid:  'Scroll to browse — click a card to peek',
-  row:   'Scroll to flip through the deck',
-  zoom:  'Scroll for next — esc to close',
+  grid:  'Scroll to browse — click a card to open it',
+  row:   'Scroll to flip through the deck — click to open',
 };
 
 const BW = 480, BH = 320;   // cards are laid out at base size, scaled by transform
@@ -498,7 +591,7 @@ function setTargets() {
   const cur = mod(cursor, N);
 
   cards.forEach(c => {
-    if (c.flying || c.dragging) return;
+    if (c.flying || c.dragging || c === takeoverC) return;
 
     if (mode === 'stack') {
       const d = mod(c.i - cur, N);
@@ -544,23 +637,13 @@ function setTargets() {
       c.el.style.zIndex = 100 + (N - Math.round(Math.abs(off)));
     }
 
-    else if (mode === 'zoom') {
-      const off = c.i - cursor;
-      const big = Math.min((panelW * 0.62) / BW, (panelH * 0.74) / BH);
-      c.tx = off * CW * 1.7;
-      c.ty = 0;
-      c.tr = 0;
-      c.ts = off === 0 ? big : RS;
-      c.tb = off === 0 ? 1 : 0.55;
-      c.to = Math.abs(off) > 3 ? 0 : 1;
-      c.el.style.zIndex = 100 + (N - Math.abs(off));
-    }
+    // while a takeover is open, everything else recedes a touch behind the scrim
+    if (takeoverC && c !== takeoverC) c.ts *= 0.955;
   });
 
   cNow.textContent = String(mod(cursor, N) + 1).padStart(2, '0');
   hintEl.textContent = HINTS[mode];
   document.body.dataset.mode = mode;
-  cards.forEach(c => c.el.classList.toggle('is-current', c.i === cur));
 }
 
 /* ---------- motion engine ----------
@@ -596,7 +679,7 @@ const MORPH_LONG = 0.82, MORPH_SHORT = 0.58;
 
 /* hand a card to the tween layer (used for view morphs) */
 function tweenTo(c, dur, ease) {
-  if (c.flying || c.dragging) return;
+  if (c.flying || c.dragging || c.takeover) return;
   c.tw = { t: 0, dur, ease: ease || EASE, from: { x: c.x, y: c.y, r: c.r, s: c.s, b: c.b, o: c.o, w: c.wsh } };
   c.vx = c.vy = c.vr = c.vs = 0;
 }
@@ -608,6 +691,8 @@ function spring(c, p, v, t) {
 }
 
 function step() {
+  if (panelW < 10) { measure(); setTargets(); }   // layout can land after first script run
+
   // time-machine pre-pass: while a scrub is live, the top card's targets ride the path
   if (mode === 'stack' && scrub.t > 0.001) {
     const top = cards[mod(cursor, N)];
@@ -638,6 +723,8 @@ function step() {
   }
 
   cards.forEach(c => {
+    if (c === takeoverC) return;   // CSS owns the expanded card
+
     if (c.frozen) { /* hold pose; render only */ }
 
     else if (c.dragging) {
@@ -741,6 +828,77 @@ function throwTop(dirX, dirY) {
   loaderPulse();
 }
 
+/* ---------- app-store takeover ----------
+   The card's FRAME morphs (width/height/margin/radius on one expo-out
+   curve) rather than blowing up a scale — the cover becomes a hero band,
+   the page rises in beneath it, everything else recedes behind a scrim. */
+const scrimEl = document.getElementById('scrim');
+const TOP_GAP = 52, T_INSET = 10;
+let takeoverTimer = null;
+
+function openTakeover(c) {
+  if (takeoverC || c.flying || c.frozen) return;
+  takeoverC = c;
+  c.takeover = true;
+  document.body.classList.add('takeover-on');
+  scrimEl.classList.add('on');
+  setTargets();                       // the rest of the deck recedes
+
+  const w = panelW - T_INSET * 2;
+  const h = panelH - TOP_GAP - T_INSET;
+  const ty = (TOP_GAP + h / 2) - panelH / 2;
+  const el = c.el;
+
+  // explicit start values so the transition has a "from"
+  el.style.width = BW + 'px';
+  el.style.height = BH + 'px';
+  el.style.margin = `${-BH / 2}px 0 0 ${-BW / 2}px`;
+  el.style.opacity = 1;
+  el.style.filter = 'brightness(1)';
+  el.style.zIndex = 550;
+  el.style.setProperty('--k', w / BW);
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.classList.add('anim', 'takeover');
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    el.style.margin = `${-h / 2}px 0 0 ${-w / 2}px`;
+    el.style.transform = `translate(0px, ${ty}px) rotate(0deg) scale(1)`;
+  }));
+}
+
+function closeTakeover() {
+  const c = takeoverC;
+  if (!c) return;
+  const el = c.el;
+
+  el.classList.remove('takeover');    // page sinks, hero un-crops, ✕ becomes ↗
+  el.style.width = BW + 'px';
+  el.style.height = BH + 'px';
+  el.style.margin = `${-BH / 2}px 0 0 ${-BW / 2}px`;
+  el.style.transform = `translate(${c.x}px, ${c.y}px) rotate(${c.r}deg) scale(${Math.max(0.01, c.s)})`;
+  scrimEl.classList.remove('on');
+  document.body.classList.remove('takeover-on');
+
+  const done = () => {
+    if (takeoverC !== c) return;
+    clearTimeout(takeoverTimer);
+    el.classList.remove('anim');
+    el.style.width = el.style.height = el.style.margin = '';
+    el.style.removeProperty('--k');
+    c.takeover = false;
+    takeoverC = null;
+    setTargets();                     // the deck breathes back to full size
+  };
+  el.addEventListener('transitionend', function h(e) {
+    if (e.target === el && e.propertyName === 'width') {
+      el.removeEventListener('transitionend', h);
+      done();
+    }
+  });
+  takeoverTimer = setTimeout(done, 750);   // headless / throttled-tab fallback
+}
+
 /* commit the scrub: the card sails on past the camera, growing and fading */
 function commitScrub() {
   const c = cards[mod(cursor, N)];
@@ -783,6 +941,7 @@ function recallPrev() {
 let drag = null;
 
 stage.addEventListener('pointerdown', e => {
+  if (takeoverC) return;             // the takeover is modal; scrim handles outside-clicks
   if (e.target.closest('.expand')) return;
   const hit = e.target.closest('.card');
   if (!hit) return;
@@ -840,6 +999,13 @@ function endDrag(e) {
     c.vr = c.vx * 0.05 + (Math.random() - 0.5) * 50;
     cursor++;
     loaderPulse();
+  } else if (!drag.moved) {
+    // a clean click on the top card opens it, app-store style
+    peek = false;
+    setTargets();
+    drag = null;
+    openTakeover(c);
+    return;
   } else {
     // not flung: seed the spring with the release velocity so the return glides, doesn't snap
     c.vx = vx; c.vy = vy;
@@ -853,6 +1019,7 @@ stage.addEventListener('pointercancel', endDrag);
 
 /* ---------- wheel ---------- */
 addEventListener('wheel', e => {
+  if (takeoverC) return;             // the takeover is modal
   const d = e.deltaY + e.deltaX;     // horizontal swipes ride the same gesture
 
   if (mode === 'grid') {
@@ -879,20 +1046,6 @@ addEventListener('wheel', e => {
     // coverflow: the wheel moves the strip directly — no steps, no locks
     flow.lastWheel = performance.now();
     flow.target = Math.max(-0.15, Math.min(N - 0.85, flow.target + d * 0.0045));
-    return;
-  }
-
-  // zoom: discrete stepping
-  wheelAcc += d;
-  if (wheelLock) return;
-  if (wheelAcc > 60) {
-    wheelLock = true; wheelAcc = 0;
-    cursor = Math.min(N - 1, cursor + 1); setTargets();
-    setTimeout(() => wheelLock = false, 180);
-  } else if (wheelAcc < -60) {
-    wheelLock = true; wheelAcc = 0;
-    cursor = Math.max(0, cursor - 1); setTargets();
-    setTimeout(() => wheelLock = false, 180);
   }
 }, { passive: true });
 
@@ -903,35 +1056,32 @@ stage.addEventListener('click', e => {
   const c = cards.find(k => k.el === hit);
 
   if (e.target.closest('.expand')) {
-    zoomFrom = (mode === 'zoom') ? zoomFrom : mode;
-    if (mode === 'zoom' && c.i === mod(cursor, N)) { setMode(zoomFrom); return; }
-    cursor = c.i;
-    setMode('zoom');
+    if (c === takeoverC) { closeTakeover(); return; }
+    openTakeover(c);
     return;
   }
-  if (mode === 'grid') { zoomFrom = 'grid'; cursor = c.i; setMode('zoom'); }
+  if (takeoverC) return;
+  if (mode === 'grid') { openTakeover(c); }
   else if (mode === 'row' && c.i !== cursor) {
     // clicking a neighbour glides the strip to it
     flow.target = c.i;
     flow.lastWheel = 0;
   }
-  else if (mode === 'zoom' && c.i !== mod(cursor, N)) {
-    cursor = c.i;
-    setTargets();
+  else if (mode === 'row' && c.i === cursor) {
+    openTakeover(c);
   }
 });
 
 addEventListener('keydown', e => {
-  if (e.key === 'Escape' && mode === 'zoom') setMode(zoomFrom);
+  if (e.key === 'Escape' && takeoverC) { closeTakeover(); return; }
+  if (takeoverC) return;
   if (e.key === 'ArrowRight') {
     if (mode === 'stack') commitScrub();
     else if (mode === 'row') { flow.target = Math.min(N - 1, Math.round(flow.target) + 1); flow.lastWheel = 0; }
-    else { cursor = Math.min(N - 1, cursor + 1); setTargets(); }
   }
   if (e.key === 'ArrowLeft') {
     if (mode === 'stack') recallPrev();
     else if (mode === 'row') { flow.target = Math.max(0, Math.round(flow.target) - 1); flow.lastWheel = 0; }
-    else { cursor = Math.max(0, cursor - 1); setTargets(); }
   }
 });
 
@@ -942,25 +1092,29 @@ function setMode(m) {
   scrub.t = 0; peek = false;
   if (m === 'grid') { gridScroll = 0; gridScrollT = 0; }
   if (m === 'stack') cursor = mod(cursor, N);
-  if (m === 'row' || m === 'zoom') {
+  if (m === 'row') {
     cursor = Math.max(0, Math.min(N - 1, mod(cursor, N)));
     flow.pos = flow.target = cursor;
     flow.lastWheel = 0;
   }
   modesEl.querySelectorAll('button').forEach(b =>
-    b.classList.toggle('on', b.dataset.mode === (m === 'zoom' ? zoomFrom : m)));
+    b.classList.toggle('on', b.dataset.mode === m));
   setTargets();
   if (m !== prev) {
-    // view morphs ride the eased tween, not the spring — long for layout swaps, short for zoom
-    const dur = (m === 'zoom' || prev === 'zoom') ? MORPH_SHORT : MORPH_LONG;
-    cards.forEach(c => tweenTo(c, dur));
+    // view morphs ride the eased tween, not the spring
+    cards.forEach(c => tweenTo(c, MORPH_LONG));
   }
 }
 
 modesEl.addEventListener('click', e => {
   const btn = e.target.closest('button');
-  if (btn) setMode(btn.dataset.mode);
+  if (!btn) return;
+  if (takeoverC) closeTakeover();
+  setMode(btn.dataset.mode);
 });
+
+scrimEl.addEventListener('click', closeTakeover);
+addEventListener('resize', () => { if (takeoverC) closeTakeover(); });
 
 /* ---------- intro ----------
    As on Marvin's site: a beat of empty panel, then the whole stack swooshes
