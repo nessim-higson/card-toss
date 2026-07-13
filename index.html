@@ -693,7 +693,7 @@ let introHold = true;      // under-deck stays hidden until the first card lands
 
 /* time-machine scrub: scroll drives the top card along an exit path —
    always upward past the camera, but every throw leans its own way */
-const scrub = { t: 0, lastWheel: 0, recallAt: 0, dirX: -0.16, dirR: -12 };
+const scrub = { t: 0, lastWheel: 0, recallAt: 0, lastCommit: 0, dirX: -0.16, dirR: -12 };
 function newScrubDir() {
   const side = Math.random() < 0.5 ? -1 : 1;
   scrub.dirX = side * (0.05 + Math.random() * 0.24);
@@ -807,9 +807,8 @@ function setTargets() {
       setSh(c, +(0.3 - 0.12 * a).toFixed(2));
     }
 
-    // while a takeover is open, the rest of the deck recedes in place —
-    // no repositioning, so everything is exactly where you left it on close
-    if (takeoverC && c !== takeoverC) c.ts *= 0.96;
+    // the deck behind a takeover stays exactly as it is — the scrim does the
+    // separating, so nothing has to resettle when the card comes back
   });
 
   cNow.textContent = String(mod(cursor, N) + 1).padStart(2, '0');
@@ -1178,7 +1177,8 @@ stage.addEventListener('pointerdown', e => {
     if (c.i !== mod(cursor, N) || c.flying || c.frozen) return;
     c.dragging = true; c.tw = null;
     scrub.t = 0;                 // your hand overrides the wheel
-    peek = true; setTargets();   // lifting the card brightens the one beneath
+    // (the card beneath brightens only once the hand actually MOVES —
+    //  a plain click must not pulse the deck)
     c.el.classList.add('grabbing');
     c.el.style.zIndex = 400;
     drag = { c, sx: e.clientX, sy: e.clientY, ox: c.x, oy: c.y, hist: [], moved: false };
@@ -1189,7 +1189,10 @@ stage.addEventListener('pointerdown', e => {
 stage.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-  if (Math.hypot(dx, dy) > 4) drag.moved = true;
+  if (!drag.moved && Math.hypot(dx, dy) > 4) {
+    drag.moved = true;
+    peek = true; setTargets();   // NOW the card beneath brightens
+  }
   const c = drag.c;
   c.x = drag.ox + dx;
   c.y = drag.oy + dy;
@@ -1272,11 +1275,16 @@ addEventListener('wheel', e => {
     // time machine: the wheel scrubs the top card along its exit path
     const top = cards[mod(cursor, N)];
     if (top.flying || top.dragging || top.frozen) return;
-    scrub.lastWheel = performance.now();
+    const nowW = performance.now();
+    scrub.lastWheel = nowW;
     if (d > 0) {
       if (scrub.t === 0) newScrubDir();   // each fresh gesture leans a new way
       scrub.t = Math.min(1, scrub.t + d * 0.0016);
-      if (scrub.t >= 0.5 || d > 140) commitScrub();
+      // rate-limit commits so a hard scroll riffles in rhythm instead of machine-gunning
+      if ((scrub.t >= 0.5 || d > 140) && nowW - scrub.lastCommit > 120) {
+        scrub.lastCommit = nowW;
+        commitScrub();
+      }
     } else if (d < 0) {
       if (scrub.t > 0.001) scrub.t = Math.max(0, scrub.t + d * 0.0016);
       else recallPrev();
@@ -1385,8 +1393,9 @@ addEventListener('resize', () => { if (takeoverC) closeTakeover(); });
   });
 
   // the visible stack waits off upper-right as a trailing fan — washed
-  // white but OPAQUE, so no card ever shows through another
-  const FAN = 6;
+  // white but OPAQUE, so no card ever shows through another.
+  // Every visible depth rides the fan, so nothing fades in on its own.
+  const FAN = STACK_N + 1;
   for (let d = 0; d < FAN; d++) {
     const c = cards[mod(cursor + d, N)];
     c.x = panelW * (0.18 + d * 0.055);
