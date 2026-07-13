@@ -323,7 +323,42 @@
   }
 
   .chrome footer { transition: opacity .35s ease; }
-  body.takeover-on .chrome footer { opacity: 0; }
+  body.takeover-on .chrome footer,
+  body.peek-on .chrome footer { opacity: 0; }
+
+  /* ===== the peek: an intermediate landing before the full dive ===== */
+  .card.takeover.peek {
+    border-radius: 14px;
+    cursor: pointer;
+    box-shadow: 0 34px 70px -16px rgba(6, 12, 45, 0.4);
+  }
+  .card.peek .page { overflow: hidden; cursor: pointer; }
+  .card.peek .page::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 96px;
+    background: linear-gradient(rgba(255,255,255,0), #fff 72%);
+    pointer-events: none;
+  }
+  .page .more {
+    display: none;
+    margin-top: 24px;
+    padding: 11px 22px;
+    border: 0;
+    border-radius: 99px;
+    background: #1d1d1f;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .2s;
+    position: relative;
+    z-index: 2;              /* rides above the truncation fade */
+  }
+  .page .more:hover { background: #3a3a3e; }
+  .card.peek .page .more { display: inline-block; }
 
   /* ================= 12 original covers ================= */
 
@@ -572,6 +607,7 @@ function pageHTML(d, i) {
     <h2>${d.t}</h2>
     <p class="kicker">${d.s}</p>
     <p class="para">${d.p}</p>
+    <button class="more">Read the case study</button>
 
     <div class="specs">
       <div><b>Year</b><span>2026</span></div>
@@ -629,6 +665,7 @@ const cards = DATA.map((d, i) => {
         <path d="M4 4 L10 10 M10 4 L4 10"/>
       </svg>
     </button>`;
+  el.style.opacity = '0';   // invisible until the engine's first write — no pre-intro flash
   stage.appendChild(el);
   const card = {
     i, el, veil: el.querySelector('.veil'), page: el.querySelector('.page'),
@@ -713,6 +750,11 @@ addEventListener('resize', () => { measure(); setTargets(); });
 
 const mod = (a, n) => ((a % n) + n) % n;
 
+/* shadow strength changes rarely — never re-write an unchanged value */
+function setSh(c, v) {
+  if (c._sh !== v) { c.el.style.setProperty('--sh', v); c._sh = v; }
+}
+
 /* ---------- layout targets per mode ---------- */
 function setTargets() {
   const cur = mod(cursor, N);
@@ -731,7 +773,7 @@ function setTargets() {
       c.tb = (d === 1 && peek) ? 1 : stackB(d);
       c.to = (introHold && d > 0) ? 0 : (d > STACK_N ? 0 : 1);
       c.el.style.zIndex = 100 + (N - d);
-      c.el.style.setProperty('--sh', d === 0 ? 0.35 : 0.08);
+      setSh(c, d === 0 ? 0.35 : 0.08);
     }
 
     else if (mode === 'grid') {
@@ -746,7 +788,7 @@ function setTargets() {
       c.ts = scale;
       c.tb = 1; c.to = 1;
       c.el.style.zIndex = 100 + c.i;
-      c.el.style.setProperty('--sh', 0.2);
+      setSh(c, 0.2);
       gridMax = Math.max(0, 64 + rowH * 4 - gap + 60 - panelH);
     }
 
@@ -762,7 +804,7 @@ function setTargets() {
       c.tb = 1 - 0.1 * a;
       c.to = Math.abs(off) > 3 ? 0 : 1;
       c.el.style.zIndex = 100 + (N - Math.round(Math.abs(off)));
-      c.el.style.setProperty('--sh', 0.3 - 0.12 * a);
+      setSh(c, +(0.3 - 0.12 * a).toFixed(2));
     }
 
     // while a takeover is open, the rest of the deck recedes in place —
@@ -896,11 +938,16 @@ function step() {
       c.wsh += (c.twsh - c.wsh) * 0.14;
     }
 
-    c.el.style.transform =
-      `translate(${c.x}px, ${c.y}px) rotate(${c.r}deg) scale(${Math.max(0.01, c.s)})`;
-    c.el.style.filter = `brightness(${Math.min(1, Math.max(0.1, c.b))})`;
-    c.el.style.opacity = Math.min(1, Math.max(0, c.o));
-    c.veil.style.opacity = Math.min(1, Math.max(0, c.wsh));
+    // write-on-change: filter/opacity/shadow writes force repaints, so only
+    // touch the DOM when a quantised value actually moved
+    const tf = `translate(${c.x.toFixed(1)}px, ${c.y.toFixed(1)}px) rotate(${c.r.toFixed(2)}deg) scale(${Math.max(0.01, c.s).toFixed(4)})`;
+    if (tf !== c._tf) { c.el.style.transform = tf; c._tf = tf; }
+    const fl = `brightness(${Math.min(1, Math.max(0.1, c.b)).toFixed(3)})`;
+    if (fl !== c._fl) { c.el.style.filter = fl; c._fl = fl; }
+    const op = Math.min(1, Math.max(0, c.o)).toFixed(3);
+    if (op !== c._op) { c.el.style.opacity = op; c._op = op; }
+    const vo = Math.min(1, Math.max(0, c.wsh)).toFixed(3);
+    if (vo !== c._vo) { c.veil.style.opacity = vo; c._vo = vo; }
   });
 
   // smooth grid scroll
@@ -911,8 +958,10 @@ function step() {
 
   // the loading ring rides the top edge of the current card
   const top = cards[mod(cursor, N)];
-  loaderEl.style.left = (panelW / 2 + top.x) + 'px';
-  loaderEl.style.top  = (panelH / 2 + top.y - (BH / 2) * top.s + 2) + 'px';
+  const lx = Math.round(panelW / 2 + top.x) + 'px';
+  const ly = Math.round(panelH / 2 + top.y - (BH / 2) * top.s + 2) + 'px';
+  if (lx !== step._lx) { loaderEl.style.left = lx; step._lx = lx; }
+  if (ly !== step._ly) { loaderEl.style.top = ly; step._ly = ly; }
 }
 
 const loaderEl = document.getElementById('loader');
@@ -965,6 +1014,28 @@ const scrimEl = document.getElementById('scrim');
 const TOP_GAP = 48;
 let takeoverTimer = null;
 let takeoverSeq = 0;        // bumped on every open AND close — stale frames bail
+let takeoverStage = null;   // 'peek' (the intermediate landing) | 'full'
+let peekAcc = 0;
+
+function stageGeom(stage) {
+  if (stage === 'full') {
+    const w = panelW, h = panelH - TOP_GAP;
+    return { w, h, tx: BW / 2 - panelW / 2, ty: TOP_GAP - panelH / 2 + BH / 2 };
+  }
+  // peek: a taller mid-size card — hero on top, intro + button below
+  const w = Math.min(620, panelW * 0.62);
+  const h = Math.min(panelH * 0.82, w * 1.02);
+  return { w, h, tx: BW / 2 - w / 2, ty: BH / 2 - h / 2 };
+}
+
+function applyStage(c, stage) {
+  const g = stageGeom(stage);
+  c.el.style.width = g.w + 'px';
+  c.el.style.height = g.h + 'px';
+  c.el.style.transform = `translate(${g.tx}px, ${g.ty}px) rotate(0deg) scale(1)`;
+  c.el.style.setProperty('--k', g.w / BW);
+  c._sh = null;   // takeover shadow is class-driven; forget the cached tier
+}
 
 /* the engine renders cards as a scaled 480×320; for the morph we bake that
    scale into real width/height so only width/height/translate animate —
@@ -981,10 +1052,13 @@ function bakePose(c) {
 
 function openTakeover(c) {
   if (takeoverC || c.flying || c.frozen) return;
+  clearTimeout(takeoverTimer);        // a pending close-finalizer must not outlive this open
   const seq = ++takeoverSeq;
   takeoverC = c;
   c.takeover = true;
-  document.body.classList.add('takeover-on');
+  takeoverStage = 'peek';
+  peekAcc = 0;
+  document.body.classList.add('peek-on');
   scrimEl.classList.add('on');
   setTargets();                       // the rest of the deck recedes
 
@@ -995,40 +1069,46 @@ function openTakeover(c) {
   el.style.zIndex = 550;
   c.page.scrollTop = 0;
   c.cover.style.transform = '';
-
-  // edge to edge, a strip of daylight up top to click out of
-  const w = panelW;
-  const h = panelH - TOP_GAP;
-  const tx = BW / 2 - panelW / 2;
-  const ty = TOP_GAP - panelH / 2 + BH / 2;
+  c._fl = c._op = c._tf = null;       // inline overrides invalidate the render cache
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (takeoverC !== c || seq !== takeoverSeq) return;   // closed before the first frame
-    el.classList.add('anim', 'takeover');
-    el.style.width = w + 'px';
-    el.style.height = h + 'px';
-    el.style.transform = `translate(${tx}px, ${ty}px) rotate(0deg) scale(1)`;
-    el.style.setProperty('--k', w / BW);
+    el.classList.add('anim', 'takeover', 'peek');
+    applyStage(c, 'peek');
   }));
+}
+
+/* the second decision: from the peek, dive into the full case study */
+function goFull() {
+  const c = takeoverC;
+  if (!c || takeoverStage !== 'peek') return;
+  takeoverStage = 'full';
+  c.el.classList.remove('peek');
+  document.body.classList.remove('peek-on');
+  document.body.classList.add('takeover-on');   // now the whole page scrolls up
+  applyStage(c, 'full');
 }
 
 function closeTakeover() {
   const c = takeoverC;
   if (!c) return;
-  ++takeoverSeq;                      // invalidate any open still waiting on a frame
+  const seq = ++takeoverSeq;          // invalidate any open still waiting on a frame
   const el = c.el;
 
   c.page.scrollTop = 0;               // the page-fade masks the reset
   c.cover.style.transform = '';
-  el.classList.remove('takeover');    // page sinks, hero un-crops, ✕ becomes ↗
+  el.classList.remove('takeover', 'peek');   // page sinks, hero un-crops, ✕ becomes ↗
+  takeoverStage = null;
+  peekAcc = 0;
   bakePose(c);                        // transition carries it back to its slot
   scrimEl.classList.remove('on');
-  document.body.classList.remove('takeover-on');
+  document.body.classList.remove('takeover-on', 'peek-on');
 
   const done = () => {
-    if (takeoverC !== c) return;
+    // bail if a newer open/close superseded this close — never nuke a fresh takeover
+    if (takeoverC !== c || seq !== takeoverSeq) return;
     clearTimeout(takeoverTimer);
-    el.classList.remove('anim', 'takeover');   // belt & braces vs stale frames
+    el.classList.remove('anim', 'takeover', 'peek');   // belt & braces vs stale frames
     el.style.width = el.style.height = '';
     el.style.removeProperty('--k');
     c.takeover = false;
@@ -1167,11 +1247,18 @@ stage.addEventListener('pointercancel', endDrag);
 /* ---------- wheel ---------- */
 addEventListener('wheel', e => {
   if (takeoverC) {
-    // route the wheel straight into the page — scrolls anywhere over the
-    // takeover, hero included, and can't double-fire with native scroll
     e.preventDefault();
-    takeoverC.page.scrollTop += e.deltaY;
-    takeoverC.cover.style.transform = `translateY(${-takeoverC.page.scrollTop}px)`;
+    if (takeoverStage === 'full') {
+      // route the wheel straight into the page — scrolls anywhere over the
+      // takeover, hero included, and can't double-fire with native scroll
+      takeoverC.page.scrollTop += e.deltaY;
+      takeoverC.cover.style.transform = `translateY(${-takeoverC.page.scrollTop}px)`;
+    } else {
+      // in the peek, scrolling is the decision: down digs deeper, up backs out
+      peekAcc += e.deltaY;
+      if (peekAcc > 90) { peekAcc = 0; goFull(); }
+      else if (peekAcc < -90) { peekAcc = 0; closeTakeover(); }
+    }
     return;
   }
   const d = e.deltaY + e.deltaX;     // horizontal swipes ride the same gesture
@@ -1210,12 +1297,20 @@ stage.addEventListener('click', e => {
   if (!hit) return;
   const c = cards.find(k => k.el === hit);
 
+  if (e.target.closest('.more')) {
+    if (takeoverStage === 'peek') goFull();
+    return;
+  }
   if (e.target.closest('.expand')) {
     if (c === takeoverC) { closeTakeover(); return; }
     openTakeover(c);
     return;
   }
-  if (takeoverC) return;
+  if (takeoverC) {
+    // anywhere on the peeked card commits to the full story
+    if (takeoverStage === 'peek' && c === takeoverC) goFull();
+    return;
+  }
   if (mode === 'grid') { openTakeover(c); }
   else if (mode === 'row' && c.i !== cursor) {
     // clicking a neighbour glides the strip to it
