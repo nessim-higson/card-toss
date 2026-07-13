@@ -617,7 +617,7 @@ const cards = DATA.map((d, i) => {
     </button>`;
   stage.appendChild(el);
   return {
-    i, el, veil: el.querySelector('.veil'),
+    i, el, veil: el.querySelector('.veil'), page: el.querySelector('.page'),
     // physical state (springs)
     x: 0, y: -1200, r: -20 + Math.random() * 40, s: 1, o: 1, b: 1, wsh: 0,
     vx: 0, vy: 0, vr: 0, vs: 0, vo: 0, vb: 0,
@@ -666,6 +666,8 @@ const HINTS = {
 
 const BW = 480, BH = 320;   // cards are laid out at base size, scaled by transform
 let RS = 1;                 // responsive scale
+const STACK_DY = 12;        // px each buried card peeks out below the one above
+const STACK_DS = 0.026;     // scale shed per depth — wider strips, prouder pile
 
 function measure() {
   const rect = stage.getBoundingClientRect();
@@ -689,9 +691,9 @@ function setTargets() {
     if (mode === 'stack') {
       const d = mod(c.i - cur, N);
       c.tx = 0;
-      c.ty = d * 7 * RS;
+      c.ty = d * STACK_DY * RS;
       c.tr = 0;
-      c.ts = RS * (1 - d * 0.038);
+      c.ts = RS * (1 - d * STACK_DS);
       // "covered" dimming: the strip peeking out below reads near-black, but the card
       // directly beneath brightens the moment the top card starts moving away
       c.tb = d === 0 ? 1
@@ -897,8 +899,8 @@ window.__settle = (n = 400) => { for (let i = 0; i < n; i++) step(); return mode
 function parkAtBack(c) {
   const d = mod(c.i - cursor, N);
   c.tw = null; c.fadeOut = false; c.wsh = 0;
-  c.x = 0; c.y = d * 7 * RS; c.r = 0;
-  c.s = RS * (1 - d * 0.038); c.b = 0.16; c.o = mode === 'stack' && d > 5 ? 0 : 1;
+  c.x = 0; c.y = d * STACK_DY * RS; c.r = 0;
+  c.s = RS * (1 - d * STACK_DS); c.b = 0.16; c.o = mode === 'stack' && d > 5 ? 0 : 1;
   c.vx = c.vy = c.vr = c.vs = 0;
   setTargets();
 }
@@ -928,6 +930,7 @@ function throwTop(dirX, dirY) {
 const scrimEl = document.getElementById('scrim');
 const TOP_GAP = 48;
 let takeoverTimer = null;
+let takeoverSeq = 0;        // bumped on every open AND close — stale frames bail
 
 /* the engine renders cards as a scaled 480×320; for the morph we bake that
    scale into real width/height so only width/height/translate animate —
@@ -944,6 +947,7 @@ function bakePose(c) {
 
 function openTakeover(c) {
   if (takeoverC || c.flying || c.frozen) return;
+  const seq = ++takeoverSeq;
   takeoverC = c;
   c.takeover = true;
   document.body.classList.add('takeover-on');
@@ -964,6 +968,7 @@ function openTakeover(c) {
   const ty = TOP_GAP - panelH / 2 + BH / 2;
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (takeoverC !== c || seq !== takeoverSeq) return;   // closed before the first frame
     el.classList.add('anim', 'takeover');
     el.style.width = w + 'px';
     el.style.height = h + 'px';
@@ -975,6 +980,7 @@ function openTakeover(c) {
 function closeTakeover() {
   const c = takeoverC;
   if (!c) return;
+  ++takeoverSeq;                      // invalidate any open still waiting on a frame
   const el = c.el;
 
   el.classList.remove('takeover');    // page sinks, hero un-crops, ✕ becomes ↗
@@ -985,7 +991,7 @@ function closeTakeover() {
   const done = () => {
     if (takeoverC !== c) return;
     clearTimeout(takeoverTimer);
-    el.classList.remove('anim');
+    el.classList.remove('anim', 'takeover');   // belt & braces vs stale frames
     el.style.width = el.style.height = '';
     el.style.removeProperty('--k');
     c.takeover = false;
@@ -1121,7 +1127,13 @@ stage.addEventListener('pointercancel', endDrag);
 
 /* ---------- wheel ---------- */
 addEventListener('wheel', e => {
-  if (takeoverC) return;             // the takeover is modal
+  if (takeoverC) {
+    // route the wheel straight into the page — scrolls anywhere over the
+    // takeover, hero included, and can't double-fire with native scroll
+    e.preventDefault();
+    takeoverC.page.scrollTop += e.deltaY;
+    return;
+  }
   const d = e.deltaY + e.deltaX;     // horizontal swipes ride the same gesture
 
   if (mode === 'grid') {
@@ -1149,7 +1161,7 @@ addEventListener('wheel', e => {
     flow.lastWheel = performance.now();
     flow.target = Math.max(-0.15, Math.min(N - 0.85, flow.target + d * 0.0045));
   }
-}, { passive: true });
+}, { passive: false });   // non-passive so the takeover can claim the wheel
 
 /* ---------- clicks: expand, grid-peek, row-jump ---------- */
 stage.addEventListener('click', e => {
@@ -1230,8 +1242,8 @@ addEventListener('resize', () => { if (takeoverC) closeTakeover(); });
   // everyone starts parked in their slot, invisible
   cards.forEach(c => {
     const d = mod(c.i - cursor, N);
-    c.x = 0; c.y = d * 7 * RS; c.r = 0;
-    c.s = RS * (1 - d * 0.038);
+    c.x = 0; c.y = d * STACK_DY * RS; c.r = 0;
+    c.s = RS * (1 - d * STACK_DS);
     c.b = d === 0 ? 1 : Math.max(0.16, 0.44 - d * 0.07);
     c.o = 0;
   });
